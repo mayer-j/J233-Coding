@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Educational Attainment by County in the USA</title>
+    <style>
+
+      .title{
+        margin: 10px;
+        padding-top: 10px;
+        padding-bottom: 20px; 
+        font-size: 35px;
+      }
+      .box{
+        margin-left: 6px;
+        margin-right: 6px;
+      }
+      .description{
+        padding-left: 20px;
+        padding-right: 8px;
+        padding-bottom: 15px; 
+        font-size: 20px;
+      }
+      .description-intro{
+        font-size: 22px;
+        padding-bottom: 30px;
+        padding-left: 8px;
+        padding-right: 8px;
+        padding-bottom: 15px;
+      }
+
+    </style>
+  </head>
+  <body>
+    <h1 class = "title">Educational Attainment by County in the USA</h1>
+    <div class = "box">
+      <div class = "description-intro">The map categorizes each county in the United States based on the educational attainment levels of its population, specifically focusing on the percentage of individuals with a bachelor’s degree or higher. Each county is assigned to one of three categories:</div>
+      <div class = "description"><strong>Low Education:</strong> Counties where fewer than 20% of the population has attained a bachelor’s degree or higher. These areas may reflect lower levels of access to higher education or a workforce focused on industries that do not typically require a college degree.</div>
+      <div class = "description"><strong>Moderate Education:</strong> Counties where 20% to 40% of the population holds a bachelor’s degree or higher. These areas represent regions with moderate levels of educational attainment, often including a mix of urban, suburban, and some rural areas.</div>
+      <div class = "description"><strong>High Education:</strong> Counties where over 40% of the population has attained a bachelor’s degree or higher. These areas often include urban and metropolitan regions, with higher access to educational institutions and a concentration of industries that prioritize or require college degrees.</div>
+    </div>  
+    
+    <div class="container vh-100"></div>
+
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script src="https://unpkg.com/topojson@3"></script>
+
+    <script>
+    var svg = d3.select(".container")
+        .append("svg")
+        .attr("width", "100%")
+        .attr("height", "100%")
+        .attr("viewBox", "0 0 975 610");
+
+    Promise.all([
+      d3.json("counties-10m.json"),
+      d3.csv("education-by-county.csv", function(d) { return {id: d.id, category: d.category}; })
+    ]).then(function(data) {
+        var education = d3.map(data[1], function(d) { return d.id; });
+
+        // Color scale for education categories
+        var color = d3.scaleOrdinal()
+            .domain(["Low Education", "Moderate Education", "High Education"])
+            .range(["#FFEDA0", "#FEB24C", "#F03B20"]);
+
+        var projection = d3.geoAlbersUsa().scale(1300).translate([487.5, 305]);
+        var path = d3.geoPath().projection(projection);
+
+        // Drawing county lines
+        svg.selectAll("path")
+          .data(topojson.feature(data[0], data[0].objects.counties).features)
+          .join("path")
+          .attr("d", path)
+          .attr("stroke", "none")
+          .attr("fill", function(d) { 
+            var category = education.get(d.id) ? education.get(d.id).category : "Low Education";
+            return color(category);
+          });
+
+        // Drawing state and national borders
+        svg.append("path")
+          .datum(topojson.feature(data[0], data[0].objects.states))
+          .attr("d", path)
+          .attr("fill", "none")
+          .attr("stroke", "black")
+          .attr("stroke-width", "0.3px");
+
+        svg.append("path")
+          .datum(topojson.feature(data[0], data[0].objects.nation))
+          .attr("d", path)
+          .attr("stroke", "black")
+          .attr("fill", "none");
+
+        // Legend
+        var legend = svg.append("g")
+          .attr("transform", "translate(800, 420)");
+
+        var legendData = ["Low Education", "Moderate Education", "High Education"];
+
+        legend.selectAll("rect")
+          .data(legendData)
+          .enter().append("rect")
+          .attr("x", 22)
+          .attr("y", (d, i) => i * 25)
+          .attr("width", 18)
+          .attr("height", 18)
+          .attr("fill", d => color(d));
+
+        legend.selectAll("text")
+          .data(legendData)
+          .enter().append("text")
+          .attr("x", 45)
+          .attr("y", (d, i) => i * 25 + 14)
+          .text(d => d);
+    });
+    </script>
+  </body>
+</html>
+
