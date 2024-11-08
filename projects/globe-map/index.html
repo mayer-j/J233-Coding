@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <title>Globe World Map</title>
+
+    <style>
+
+    .title{
+      padding-top: 15px; 
+      padding-left: 15px;
+    }
+
+
+    #title{ 
+      font-size: 40px;
+      margin-top: 0;
+      margin-bottom: 0;
+      text-align: center; 
+    }
+
+    #subline{
+      padding-top: 5px;
+      margin-top: 0px;
+      font-size: 25px;
+      text-align: center;
+    }
+
+    #source{
+      position: fixed; 
+      bottom: 10px; 
+      right: 15px; 
+      font-size: 10px; 
+      color: #666;
+    }    
+
+    #link{
+      color: #666;
+      text-decoration: none;
+    }
+
+  
+    
+    </style>
+  </head>
+  <body>
+
+    <div class="title">
+      <h2 id="title">Significant Earthquakes Worldwide</h2>
+      <h3 id="subline">(between October 12 and November 5, 2024)</h3>
+    </div>
+    
+    <!-- Container that will hold svg. Bootstrap's vh-100 class means 100% viewport height -->
+    <div class="container vh-100"></div>
+      
+    <script type="text/javascript"></script>
+ 
+    <script src="js/d3.v5.min.js"></script>
+    <script src="js/d3-geo-projection.v2.min.js"></script>
+    <script src="js/d3-array.v2.min.js"></script>
+    <script src="js/d3-drag.v1.min.js"></script>
+    <script src="js/topojson.min.js"></script>
+    <script>
+
+    
+    const margin  = {top:0, right:0, bottom:0, left:0},
+          width   = 1000 - margin.left - margin.right,
+          height  = 800  - margin.top - margin.bottom;
+
+    const svg = d3.select('body')
+        .append('svg')
+        .attr('width', '100%')
+        .attr('height', '100%')
+        .attr('viewBox', `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`);
+
+    const chart = svg.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`)
+        .datum({x:0, y:0});
+
+
+    Promise.all([
+      d3.json("countries-110m.json"),
+      d3.csv("earthquake_data.csv", function(d){
+
+        //convert certain columns to numbers
+        //set id property to the name of each space port.
+        return {
+          mag:      +d.mag, 
+          lat:      +d.latitude, 
+          long:     +d.longitude,
+          depth:    +d.depth, 
+          id:        d["place"], 
+          country:   d.country } 
+        }
+      )
+    ]).then(function(data){
+
+
+      //shadow http://dwtkns.com/srtm/
+
+        
+        //group countries in an Array Map class
+        var countryGroups = d3.group(data[1], function(d){ return d.country; });
+
+        //get the maximum number of countries in any grouping
+        var maxCountries = d3.max(Array.from(countryGroups).map(function(d){ return d[1].length}));
+
+
+        var color = d3.scaleLinear()
+          .range(["#c1e7ff", "#5886a5"])
+          .domain([0, maxCountries]);
+
+        var depthColor = d3.scaleSequential(d3.interpolateBlues)
+          .domain(d3.extent(data[1], d => d.depth))
+
+        //initial yaw (X-axis rotation) Change to degree value for initial view
+        var yaw = 300;
+
+        //The Y-axis tilt
+        var tilt = -30;
+
+        //size scale for bubbles
+        var size = d3.scalePow()
+          .domain(d3.extent(data[1], function(d){ return d.mag; }))
+          .range([0.5, 5]);
+      
+
+        //setup globe projection
+        var projection = d3.geoOrthographic()
+            .fitExtent([[0,0],[width,height]], topojson.feature(data[0], data[0].objects.countries))
+            .rotate([yaw, tilt]);
+
+
+        //sensitivity of drag
+        var sensitivity = 0.25;
+
+        //boolean to stop rotate when dragging
+        var dragging = false;
+
+        /*
+         * Uncomment for auto-rotate
+         *
+         *
+         */
+
+        
+        // window.setInterval(function(){
+        //   if(dragging == false){
+        //     projection.rotate([yaw, tilt]);
+        //     chart.selectAll("path.countries").attr("d", path);
+        //     chart.selectAll("path.graticle").attr("d", path);
+        //     chart.selectAll("path.circles").attr("d", (d)=> {
+        //       d.c = circle.center([d.long, d.lat]).radius(size(d.launches));
+        //       return path(d.c());
+        //     })
+        //     yaw -= 0.25;
+        //   }
+        // },50);
+
+
+        var defs = chart.append('defs');
+
+        var ocean     = defs.append('radialGradient').attr('id', 'ocean');
+        var highlight = defs.append('radialGradient').attr('id', 'highlight');
+        var shading   = defs.append('radialGradient').attr('id', 'shading');
+
+        ocean.append('stop').attr('offset',   '10%').attr('stop-color', '#ebebef').attr('stop-opacity', '0.6');
+        ocean.append('stop').attr('offset', '100%').attr('stop-color', '#a2abb3').attr('stop-opacity', '0.6');
+
+        highlight.append('stop').attr('offset',   '5%').attr('stop-color', '#ffffdd').attr('stop-opacity', '0.3');
+        highlight.append('stop').attr('offset', '100%').attr('stop-color', '#bbaa99').attr('stop-opacity', '0.1');
+
+        shading.append('stop').attr('offset',  '50%').attr('stop-color', '#a2abb3').attr('stop-opacity', '0.0');
+        shading.append('stop').attr('offset', '100%').attr('stop-color', '#57616b').attr('stop-opacity', '0.3');
+        
+
+
+        var graticule = d3.geoGraticule();
+
+        console.log()
+
+        var path = d3.geoPath()
+            .projection(projection);
+
+
+        chart.append('circle')
+          .attr('cx', width/2)
+          .attr('cy', height/2)
+          .attr('r', projection.scale())
+          .attr('fill', 'url("#ocean")');
+
+
+
+        chart.append("path")
+          .datum(graticule)
+          .attr("d", path)
+          .attr("class", "graticle")
+          .style("stroke", "#777")
+          .style("stroke-width", ".5px")
+          .style("stroke-opacity", 0.3)
+          .style("fill", 'none');
+
+            
+        chart.selectAll("path.countries")
+          .data(topojson.feature(data[0], data[0].objects.countries).features)
+          .join("path")
+          .attr("d",  path)
+          .attr("class", function(d){ return "countries " + d.properties.name; }) //add country name
+          .attr("stroke", "#999")
+          .attr("stroke-dasharray", "2 2")
+          .attr("stroke-width", "0.5px")
+          .attr("fill", function(d){ 
+            if(countryGroups.get(d.properties.name)){
+              return "#96CDCD";
+            } else {
+              return "#FFEFD5";
+            }
+          }); 
+        
+
+          var λ = d3.scaleLinear()
+            .domain([-width, width])
+            .range([-180, 180]);
+
+
+          chart.call(d3.drag()
+              .on("drag", function(d){
+
+                  dragging = true;
+
+                  projection.rotate([yaw + λ(d3.event.x), tilt - λ(d3.event.y)]);
+                  chart.selectAll("path.countries").attr("d", path);
+                  chart.selectAll("path.graticle").attr("d", path);
+                  chart.selectAll("path.circles").attr("d", (d)=> {
+                    d.c = circle.center([d.long, d.lat]).radius(size(d.mag));
+                    return path(d.c());
+                  });
+              })
+              .on("end", function(d){
+                  dragging = false;
+                  yaw = yaw + λ(d3.event.x);
+                  tilt = tilt - λ(d3.event.y);
+              })
+          );
+
+
+      //add circles based on lat/long of points
+      var circle = d3.geoCircle();
+
+      chart.selectAll("path.circles")
+        .data(data[1])
+        .enter()
+        .append("path")
+        .attr("class", "circles")
+        .attr("d", function(d){
+          d.c = circle.center([d.long, d.lat]).radius(size(d.mag));
+          return path(d.c());
+        })
+        .attr("fill",  d => depthColor(d.depth))
+        .attr("stroke", "#000")
+        .attr("stroke-width", "0.5px")
+        .style("opacity", 0.8);
+
+
+      // Add a legend
+
+      const legendWidth = 150;
+      const legendHeight = 15;
+      const legendSpacing = 50;
+      
+      const legendX = width - legendWidth - 5;
+      const legendY = height - legendHeight - 35;
+
+      const depthLegend = svg.append("g")
+        .attr("transform", `translate(${legendX}, ${legendY - 50})`);
+
+      depthLegend.append("text")
+        .attr("x", 0)
+        .attr("y", -10)
+        .text("Erdbeben-Tiefe (km)")
+        .style("font-size", "12px");
+
+      depthLegend.selectAll(".depth-rect")
+        .data(d3.range(depthColor.domain()[0], depthColor.domain()[1], (depthColor.domain()[1] - depthColor.domain()[0]) / 5))
+        .enter()
+        .append("rect")
+        .attr("x", (d, i) => i * (legendWidth / 5))
+        .attr("y", 0)
+        .attr("width", legendWidth / 5)
+        .attr("height", legendHeight)
+        .attr("fill", d => depthColor(d));
+
+      depthLegend.selectAll(".depth-text")
+        .data(d3.range(depthColor.domain()[0], depthColor.domain()[1], (depthColor.domain()[1] - depthColor.domain()[0]) / 5))
+        .enter()
+        .append("text")
+        .attr("x", (d, i) => i * (legendWidth / 5) + (legendWidth / 10))
+        .attr("y", legendHeight + 12)
+        .attr("text-anchor", "middle")
+        .style("font-size", "10px")
+        .text(d => Math.round(d));
+
+      const magnitudeLegend = svg.append("g")
+        .attr("transform", `translate(${legendX}, ${legendY})`);
+
+      magnitudeLegend.append("text")
+        .attr("x", 0)
+        .attr("y", -0.5)
+        .text("Magnitude")
+        .style("font-size", "12px");
+
+      magnitudeLegend.selectAll(".magnitude-rect")
+        .data(d3.range(size.domain()[0], size.domain()[1], (size.domain()[1] - size.domain()[0]) / 5))
+        .enter()
+        .append("circle")
+        .attr("cx", (d, i) => i * (legendWidth / 5) + (legendWidth / 10))
+        .attr("cy", legendHeight / 2)
+        .attr("r", d => size(d))
+        .attr("fill", "#5886a5")
+        .attr("stroke", "#000")
+        .attr("stroke-width", "0.5px");
+
+      magnitudeLegend.selectAll(".magnitude-text")
+        .data(d3.range(size.domain()[0], size.domain()[1], (size.domain()[1] - size.domain()[0]) / 5))
+        .enter()
+        .append("text")
+        .attr("x", (d, i) => i * (legendWidth / 5) + (legendWidth / 10))
+        .attr("y", legendHeight + 15)
+        .attr("text-anchor", "middle")
+        .style("font-size", "10px")
+        .text(d => d.toFixed(1));
+
+    });
+
+    </script>
+
+    <div id= source>
+      Source: <a id= link href="https://earthquake.usgs.gov/" target="_blank">US Geological Survey (USGS)</a>
+    </div>
+
+  </body>
+</html>
